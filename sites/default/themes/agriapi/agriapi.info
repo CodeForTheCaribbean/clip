@@ -21,6 +21,11 @@ regions[page_bottom]    = 'Page bottom'
 
 
 ;;;;;;;;;;;;;;;;;;;;;
+;; Javascript 
+;;;;;;;;;;;;;;;;;;;;;
+scripts[] = 'js/script.js'
+
+;;;;;;;;;;;;;;;;;;;;;
 ;; Stylesheets
 ;;;;;;;;;;;;;;;;;;;;;
 
