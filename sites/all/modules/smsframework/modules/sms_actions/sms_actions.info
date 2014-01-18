@@ -1,0 +1,13 @@
+name = "SMS Actions"
+description = "Provides an action for sending outgoing messages and the ability to define custom triggers for incoming messages."
+package = SMS Framework
+dependencies[] = sms
+dependencies[] = trigger
+core = 7.x
+
+; Information added by drupal.org packaging script on 2013-10-01
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "smsframework"
+datestamp = "1380628904"
+

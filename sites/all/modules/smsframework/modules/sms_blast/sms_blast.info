@@ -1,0 +1,12 @@
+name = SMS Blast
+description = Allows bulk text messages to be sent to registered users.
+package = SMS Framework
+dependencies[] = sms_user
+core = 7.x
+
+; Information added by drupal.org packaging script on 2013-10-01
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "smsframework"
+datestamp = "1380628904"
+

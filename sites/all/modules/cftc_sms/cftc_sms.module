@@ -1,0 +1,20 @@
+<?php
+function cftc_sms_sms_incoming($op, $number, $message, $options) {
+	if($op == 'process' ){
+			$msg = 'No farmers found for that receipt number.';
+			$result = drupal_http_request("http://agriapi.herokuapp.com/receipts/$message");
+		
+	    if($result->code == 200) {
+		$data = json_decode($result->data);
+		watchdog("cftc_sms", $message);
+		
+		if(isset($data->farmer)) {
+			$msg = $data->farmer;
+			watchdog("cftc_sms", $msg);
+		}
+	    }
+	   
+	    sms_send($number, $msg);
+	}
+	}
+

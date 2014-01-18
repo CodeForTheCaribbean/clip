@@ -1,0 +1,323 @@
+<?php
+/**
+ * @file
+ * Adds support for sending SMS messages using the RocketSMS gateway.
+ * RocketSMS gateway module for Drupal SMS Framework. Outbound and Inbound. 
+ * 
+ * Before you can start sending messages you must enter your username/password and 
+ * a valid default Sender.
+ * 
+ * To make inbound SMS work you must set your RocketSMS phone number callback URL to
+ * http(s)://yourhost.example.com/rocketsms/receiver
+ * 
+ * @package smsframework
+ * @subpackage rocketsms
+ * 
+ */
+ 
+ /**
+* Implementation of hook_menu
+* 
+* @return array Drupal menu items 
+*/
+function rocketsms_menu() {
+  $items['rocketsms/receiver'] = array(
+    'title' => 'Incoming SMS',
+    'page callback' => 'rocketsms_incoming_callback',
+    'access callback' => TRUE, 
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+* Implementation of hook_gateway_info
+* 
+* @return array SMS Framework gateway info 
+*/
+function rocketsms_gateway_info() {
+  return array(
+    'rocketsms' => array(
+      'name' => t('RocketSMS'),
+      'send' => 'rocketsms_framework_send',
+      'receive' => TRUE,
+      'configure form' => 'rocketsms_gateway_settings',
+    )
+  );
+}
+
+/**
+* Simple function that makes requests to the RocketSMS API using stored credentials
+* 
+* @param mixed $path
+* @param mixed $type
+* @param mixed $data
+* @return mixed
+*/
+function rocketsms_request($path, $type = 'get', $data = array()) {
+  $url = 'https://api.rocketsms.co/1.0/' . $path;
+  $gateway = sms_gateways('gateway', 'rocketsms');
+
+  //Username and password required for every request
+  if (!isset($gateway['configuration']['rocketsms_username']) || !isset($gateway['configuration']['rocketsms_password'])) {
+    return FALSE;
+  }
+
+  $ch = curl_init($url);
+  
+  $curl_options[CURLOPT_USERPWD] =  $gateway['configuration']['rocketsms_username'] . ":" . $gateway['configuration']['rocketsms_password'];
+  $curl_options[CURLOPT_RETURNTRANSFER] = TRUE; 
+  $curl_options[CURLOPT_FOLLOWLOCATION] = TRUE;
+
+  switch ($type) {
+    case 'get':
+      if (!empty($data)) {
+        $url = $url . '?' . http_build_query($data);
+      } 
+      break;
+      
+    case 'post':
+      $curl_options[CURLOPT_POST] =  TRUE;
+      
+      if (!empty($data)) {
+        $curl_options[CURLOPT_POSTFIELDS] = http_build_query($data); 
+      }
+      break;
+      
+    case 'put':
+      $curl_options[CURLOPT_CUSTOMREQUEST] = "PUT";
+      
+      if (!empty($data)) {
+        $curl_options[CURLOPT_POSTFIELDS] = http_build_query($data); 
+      }
+      break;
+      
+    case 'delete':
+      $curl_options[CURLOPT_CUSTOMREQUEST] = "DELETE";
+      
+      if (!empty($data)) {
+        $url = $url . '?' . http_build_query($data);
+      } 
+      break;  
+  }
+  
+  curl_setopt_array($ch, $curl_options); 
+  $data = curl_exec($ch); 
+  $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);   
+  $curl_error = curl_error($ch);
+  curl_close($ch);
+  
+  return (object) array(
+    'data' => json_decode($data),
+    'code' => $http_code,
+    'error' => $curl_error,
+  );
+}
+
+function rocketsms_send(array $numbers, $message, $from = NULL, $options = array()) {
+  $gateway = sms_gateways('gateway', 'rocketsms');
+  
+  //Allow other modules to override from/sender
+  if (isset($options['from'])) {
+    $from = $options['from'];
+  } 
+  
+  //If no from provided then use the default Sender
+  if (empty($from) && isset($gateway['configuration']['rocketsms_from'])) {
+    $from = $gateway['configuration']['rocketsms_from'];
+  }
+  
+  if (!empty($from)) {
+    $data = array(
+      'to' => implode(',', $numbers),
+      'from' => $from,
+      'message' => $message,
+    );
+    
+    $result = rocketsms_request('sms/send', 'post', $data);
+    
+    if ($result->code == 200) {
+      return TRUE;
+    }
+    else {
+      watchdog('rocketsms', 'Failed to send SMS: @error', array('@error' => $result->error), WATCHDOG_ERROR);
+    }
+  }
+  else {
+    watchdog('rocketsms', 'No default Sender set for RocketSMS', NULL, WATCHDOG_ERROR);
+  }
+  
+  return FALSE;
+}
+
+function rocketsms_framework_send($number, $message, $options) {
+  return array('status' => rocketsms_send(array($number), $message, NULL, $options));
+}
+
+function rocketsms_gateway_settings($configuration) {
+  $form['account'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Account Information'),
+    '#description' => 'Account information from RocketSMS.'
+  );
+  
+  $form['account']['rocketsms_username'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Username'),
+    '#default_value' => isset($configuration['rocketsms_username']) ? $configuration['rocketsms_username'] : '',
+    '#required' => TRUE,
+  );
+  
+  $form['account']['rocketsms_password'] = array(
+    '#type' => 'password',
+    '#title' => t('Password'),
+    '#attributes' => array('value' => isset($configuration['rocketsms_password']) ? $configuration['rocketsms_password'] : ''),
+    '#required' => TRUE,
+  );
+  
+  $form['sms_settings'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('SMS Settings'),
+  );
+  
+  $form['sms_settings']['rocketsms_from'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Default Sender'),
+    '#description' => t('The message sender ID (<= 18 characters if numeric, <= 11 characters if alphanumeric)'),
+    '#required' => TRUE,
+    '#default_value' => isset($configuration['rocketsms_from']) ? $configuration['rocketsms_from'] : '',
+  );
+  
+  $form['sms_settings']['rocketsms_token'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Inbound SMS Token'),
+    '#default_value' => isset($configuration['rocketsms_token']) ? $configuration['rocketsms_token'] : '',
+    '#description' => t('Your private Authentication Token used to verify that messages originated from RocketSMS.')
+  );  
+  
+  return $form;
+}
+
+function rocketsms_gateway_settings_validate($form, &$form_state) {
+  if(!empty($form_state['values']['rocketsms_from'])) {
+    $length = strlen($form_state['values']['rocketsms_from']);
+    
+    if (is_numeric($form_state['values']['rocketsms_from'])) {
+      if ($length > 18) {  
+        form_set_error('rocketsms_from', t('A numeric sender is limited to a maximum of 18 characters.')); 
+      }
+    }
+    else if($length > 11) {
+      form_set_error('rocketsms_from', t('An alphanumeric sender is limited to a maximum of 11 characters.'));
+    }
+  }
+}
+
+function rocketsms_incoming_callback() {
+  $gateway = sms_gateways('gateway', 'rocketsms');
+  
+  if (!isset($gateway['configuration']['rocketsms_token'])) {
+    watchdog('rocketsms', 'No inbound Authentication token set.', NULL, WATCHDOG_ERROR);
+    return;
+  }
+  
+  if (isset($_POST['token']) && $_POST['token'] == $gateway['configuration']['rocketsms_token']) {
+    $options = array(
+      'message_id' => $_POST['message_id'],
+      'to' => $_POST['to'],
+      'receiver' => $_POST['to'],
+      'from' => $_POST['from'],
+      'gateway' => 'RocketSMS',
+      'contact_id' => isset($_POST['contact_id']) ? $_POST['contact_id'] : 0,  
+    );   
+    
+    sms_incoming($_POST['from'], $_POST['message'], $options);
+  }
+}
+
+/**
+* Utility functions mainly for Rules
+*/
+
+function rocketsms_create_contact($number, $name = "") {
+  return rocketsms_request('contact', 'post', array('number' => $number, 'name' => $name));
+}
+
+function rocketsms_delete_contact($contact_id) {
+  return rocketsms_request("contact/$contact_id", 'delete');
+}
+
+function rocketsms_create_group($name, $description = "") {
+  return rocketsms_request('group', 'post', array('name' => $name, 'description' => $description));
+}
+
+function rocketsms_delete_group($group_id) {
+  return rocketsms_request("group/$group_id", 'delete');
+}
+
+function rocketsms_group_contact_add($group_id, $contact_id) {
+  return rocketsms_request("group/$group_id/addContact", 'post', array('contact_id' => $contact_id));
+}
+
+function rocketsms_group_contact_remove($group_id, $contact_id) {
+  return rocketsms_request("group/$group_id/removeContact", 'post', array('contact_id' => $contact_id));
+}
+
+function rocketsms_group_index() {
+  $groups = array();
+  $result = rocketsms_request("group");
+  
+  if ($result->code == 200) {
+    foreach ($result->data AS $group) {
+      $groups[$group->group_id] = $group->name;
+    }
+  }
+  
+  return $groups;
+}
+
+function rocketsms_create_tag($name, $description = "") {
+  return rocketsms_request('tag', 'post', array('name' => $name, 'description' => $description));
+}
+
+function rocketsms_delete_tag($tag_id) {
+  return rocketsms_request("tag/$tag_id", 'delete');
+}
+
+function rocketsms_contact_tag_add($contact_id, $tag_id) {
+  return rocketsms_request("contact/$contact_id/addTag", 'post', array('tag_id' => $tag_id));
+}
+
+function rocketsms_contact_tag_remove($contact_id, $tag_id) {
+  return rocketsms_request("contact/$contact_id/removeTag", 'post', array('tag_id' => $tag_id));
+}
+
+function rocketsms_tag_index() {
+  $tags = array();
+  $result = rocketsms_request("tag");
+  
+  if ($result->code == 200) {
+    foreach ($result->data AS $tag) {
+      $tags[$tag->tag_id] = $tag->name;
+    }
+  }
+  
+  return $tags;
+}
+
+function rocketsms_users_send(array $users, $number_field, $message, $from = NULL) {
+  $to = array();
+  
+  foreach ($users AS $user) {       
+    $wrapper = entity_metadata_wrapper('user', $user);    
+    $number = $wrapper->{$number_field}->value();
+    if (!empty($number)) {
+      $to[] = $number;
+    }
+  }
+  
+  if (!empty($to)) {
+    rocketsms_send($to, $message, $from);
+  }
+}

@@ -1,0 +1,7 @@
+name = RocketSMS
+description = "Provides integration between SMS Framework and the RocketSMS gateway." 
+core = 7.x
+
+configure = admin/smsframework/gateways/rocketsms
+
+dependencies[] = sms
