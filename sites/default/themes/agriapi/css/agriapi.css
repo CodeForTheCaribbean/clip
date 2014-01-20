@@ -11,6 +11,7 @@
 
 .region-sidebar-first{
 	position:fixed;
+	width:20%;
 }
 
 .col-sm-6 {
@@ -40,3 +41,7 @@ padding-right: 0;
 	border-bottom: 1px #ccc solid;
 }
 
+code{
+	background:#000;
+	white-space: pre-wrap;
+}
