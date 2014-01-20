@@ -13,13 +13,23 @@
 	position:fixed;
 }
 
-.container{
+.col-sm-6 {
+padding-right: 0;
+}
+
+.main-container{
 	margin-right:0;
+	margin-left:0;
+	padding-right: 0;
 }
 
 .navbar.container {
 	max-width: inherit;
 	width: 100%;
+}
+.docs-nav .nav li a{
+	padding:5px;
+	font-size:15px;
 }
 
 .col-sm-9{
