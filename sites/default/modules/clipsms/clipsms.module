@@ -127,7 +127,7 @@ function clipsms_message_var($keyw, $txt){
  *Returns data from Harvest API
  */
 function get_agriapi_data($path, $usr='rada' , $pass='demo'){
-	$apiurl = "http://$usr:$pass@agriapi.herokuapp.com";
+	$apiurl = "http://$usr:$pass@harvestdata.herokuapp.com";
 	$fullurl = $apiurl . $path;
 	$result = drupal_http_request($fullurl);
 	$data = json_decode($result->data);
