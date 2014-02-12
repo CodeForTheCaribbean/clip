@@ -1,0 +1,139 @@
+<?php
+/**
+ * Processes incoming SMS message, detects keyword, queries Harvest API and sends reply via sms_send() 
+ */
+function clipsms_sms_incoming($op, $number, $message, $options){
+ 
+	if($op == 'process'){
+
+	//array of keywords
+	$allkeywords = array('farmer','f','receipt','r','register', 'police', 'p');
+	$kw = clipsms_keyword_exists($allkeywords, $message); 
+	$var = clipsms_message_var($kw, $message);
+
+	switch ($kw)
+	{
+		case 'farmer':
+		case 'f':
+			watchdog("clipsms",'message keyword = '.$kw );
+			$rply = clipsms_get_farmer_info($var);
+		break;
+		case 'receipt':
+		case 'r':
+			watchdog("clipsms",'message keyword = '.$kw );
+			$rply = clipsms_get_receipt_info($var);
+		break;
+		case 'police':
+		case 'p':
+			watchdog("clipsms",'message keyword = '.$kw );
+			$rply = clipsms_register_police_info($var);
+		break;
+		default:
+			$rply = "No keyword detected in message.";
+		}
+
+	sms_send($number, $rply);
+	watchdog("clipsms","SMS Reply: $rply");
+	
+	}//process
+}
+
+/**
+ *Returns keyword match: searches text to see if keyword in $keywords array exists 
+ */
+function clipsms_keyword_exists($keywords=array(), $text=''){
+
+	//make text lower case
+	$txt = strtolower($text);
+         foreach (preg_split("/\s/", $txt) as $word)
+         {
+                 $string[$word] = 1;
+         }
+
+         foreach ($keywords as $keyword)
+         {
+                 if (isset($string[$keyword]))
+                 {
+                         // $keyword exists in string
+                        return $keyword;
+                 }
+         }
+}
+
+/**
+ *Returns info from Harvest API based on farmer ID number
+ */
+function clipsms_get_farmer_info($fid){
+		$msg = "Sorry the farmer ID $fid has not been found in the system. Please check if this the correct number and try again";
+		$rec = "/farmers/$fid/";
+		$data = get_agriapi_data($rec, 'admin', 'qwerty');	
+		if(empty($frmr->alias) == false) {
+			//ad quotes around the alias variable
+			$data->alias =  "\"$data->alias\"";
+			}
+		if(isset($data->farmer_id)) {
+			if($data->verified_status == "Yes"){
+			$msg = "The farmer id belongs to $data->first_name $data->alias $data->last_name. This is a verified $data->agri_activity farmer";
+			}else{
+			$msg = 	"The farmer id belongs to $data->first_name $data->alias $data->last_name. They are not yet verified, but registered as a $data->agri_activity farmer.";
+			}
+		}
+			
+	return $msg;
+}
+
+/**
+ *Returns info from Harvest API based on receipt ID number
+ */
+function clipsms_get_receipt_info($rid){
+		$msg = "Sorry the receipt number $rid has not been found in the system. Please try again or call ______"; 
+		$rec = "/receipts/$rid";
+		$data = get_agriapi_data($rec, 'admin', 'qwerty');	
+		if(isset($data->farmer)) {
+			$frmr = $data->farmer;
+		if(empty($frmr->alias) == false) {
+			//ad quotes around the alias variable
+			$frmr->alias =  "\"$frmr->alias\"";
+			}
+		if($data->investigation_status == "1"){
+			$msg ="The receipt number belongs to farmer $frmr->first_name $frmr->alias $frmr->last_name and is under investigation. $data->remarks";
+			}else{
+			$msg = "The receipt number belongs to farmer $frmr->first_name $frmr->alias $frmr->last_name and is valid. The receipt book was sold on <date>.";
+			}
+		}
+	return $msg;
+}
+
+function clipsms_register_user_info(){}
+
+/**
+ *Returns data string found after the keyword 
+ */
+function clipsms_message_var($keyw, $txt){
+	//make text lower case
+	$txt_lcase = strtolower($txt);
+	//get text after the keyword
+	$short_str = strstr($txt_lcase, $keyw);
+	$data = explode(" ", $short_str);	
+	if(isset($data[1])){
+		return $data[1];
+	}else{
+			watchdog("clipsms", "There is no data after the keyword ".$data[0]);
+			break;	
+		};
+}
+
+/**
+ *Returns data from Harvest API
+ */
+function get_agriapi_data($path, $usr='rada' , $pass='demo'){
+	$apiurl = "http://$usr:$pass@agriapi.herokuapp.com";
+	$fullurl = $apiurl . $path;
+	$result = drupal_http_request($fullurl);
+	$data = json_decode($result->data);
+
+	    if($result->code == 200) {
+		watchdog("clipsms","API query sucessful: $result->data");
+		return $data;
+		}
+}

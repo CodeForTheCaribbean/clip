@@ -1,0 +1,3 @@
+name = CLIP SMS module
+description = Recieve information from Harvest API via SMS on Crop, Livestock & Price Information.
+core = 7.x
