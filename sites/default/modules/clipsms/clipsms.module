@@ -34,7 +34,7 @@ function clipsms_sms_incoming($op, $number, $message, $options){
 			$rply = "No keyword detected in message.";
 		}
 
-//	sms_send($number, $rply);
+	sms_send($number, $rply);
 	watchdog("clipsms","SMS Reply: $rply");
 	
 	}//process
@@ -94,7 +94,7 @@ function clipsms_get_receipt_info($rid){
 		if(isset($data->farmer)) {
 			$frmr = $data->farmer;
 		if(empty($frmr->alias) == false) {
-			//ad quotes around the alias variable
+			//add quotes around the alias variable
 			$frmr->alias =  "\"$frmr->alias\"";
 			}
 		if($data->investigation_status == "1"){
@@ -113,18 +113,17 @@ function clipsms_register_user_info($smstxt, $from){
 	
 	$email_domain = '@digitextjm.com';
 	//check sms text
-	if(!(stristr($smstxt, 'jd123'))){
+	if(!(stristr($smstxt, 'jc123'))){
 		return "Not Authorized";
 	}	
 
 	//if user already exists, check if they are 'active'
-	$exists_user = user_load_by_name($from);
-	if($exists_user->status ==1 ){
+	$exists_user = clipsms_number_exists($from);
+	if($exists_user && clipsms_user_blocked($from)){
+		$smstxt = 'This number has been blocked.';
+	}elseif($exists_user){
 		$smstxt = 'Number already registered, please try using r XXXX or f XXXX for receipt or farmer information or call XXX-XXXX for further assistance';
-	}elseif($exists_user->status ==0){
-		$smstxt = 'This number is blocked.';
-	}else{
-		
+		}else{
 		//create new user
 		$newUser = array(
 			'name' => $from,
@@ -134,16 +133,40 @@ function clipsms_register_user_info($smstxt, $from){
 			'init' => 'email address'
 		);
 		user_save(null, $newUser);
-		//add to RocketSMS contact list
-		dsm($usr);
-		
+		//add to RocketSMS contact list TODO
+		$smstxt = 'Your number ' . $from . ' has been registered. Welcome to CLIP.';
 		}
 	return $smstxt;
 	
 }
 
 /**
- *Returns data string found after the keyword 
+ *Returns TRUE if user is blacklisted(blocked), FALSE if not 
+ */
+function clipsms_user_blocked($number) {
+	$count = db_select('users')->condition('name', $number)->condition('status', 0,'=')->countQuery()->execute()->fetchField();
+  if (!$count) {
+    // User doesn't exist
+	return FALSE;
+  }else{
+	return TRUE;
+	}
+}
+/**
+ *Returns TRUE if user exists, FALSE if not 
+ */
+function clipsms_number_exists($number) {
+	$count = db_select('users')->condition('name', $number)->countQuery()->execute()->fetchField();
+  if (!$count) {
+    // User doesn't exist
+	return FALSE;
+  }else{
+	return TRUE;
+	}
+}
+
+/**
+ *Returns data string found after the keyword and extire string if no keyword found. 
  */
 function clipsms_message_var($keyw, $txt){
 	//make text lower case
@@ -155,7 +178,7 @@ function clipsms_message_var($keyw, $txt){
 		return $data[1];
 	}else{
 			watchdog("clipsms", "There is no data after the keyword ".$data[0]);
-			break;	
+			return $txt;	
 		};
 }
 
