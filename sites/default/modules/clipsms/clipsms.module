@@ -8,7 +8,9 @@ function clipsms_sms_incoming($op, $number, $message, $options){
 
 	//array of keywords
 	$allkeywords = array('farmer','f','receipt','r','register', 'police', 'p');
+	//check if keyword exists
 	$kw = clipsms_keyword_exists($allkeywords, $message); 
+	//get string after keyword
 	$var = clipsms_message_var($kw, $message);
 
 	switch ($kw)
@@ -26,7 +28,7 @@ function clipsms_sms_incoming($op, $number, $message, $options){
 		case 'police':
 		case 'p':
 			watchdog("clipsms",'message keyword = '.$kw );
-			$rply = clipsms_register_police_info($var);
+			$rply = clipsms_register_user_info($var, $number);
 		break;
 		default:
 			$rply = "No keyword detected in message.";
@@ -103,8 +105,50 @@ function clipsms_get_receipt_info($rid){
 		}
 	return $msg;
 }
+/**
+ *Returns string reply on outcome of user registration 
+ */
 
-function clipsms_register_user_info(){}
+function clipsms_register_user_info($smstxt, $from){
+	
+	$email_domain = '@digitextjm.com';
+/*	//use lime keyword to specify carrier
+	if(stristr($smstxt, 'lime')){
+		$email_domain = '@txt2lime.com';
+	}
+*/
+	//check sms text
+	if(!(stristr($smstxt, 'jdf123'))){
+		return "Not Authorized";
+	}	
+
+		//if user already exists, check if they are 'active'
+	$exists_user = user_load_by_name($from);
+	if($exists_user->status ===1 ){
+		$smstxt = 'Number already registered, please try using r XXXX or f XXXX for receipt or farmer information or call XXX-XXXX for further assistance';
+	}elseif($exists_user->status ===0){$smstxt = 'This number is blocked.'
+	}else{
+		
+		//create new user
+		$newUser = array(
+			'name' => $from,
+			'pass' => user_password(),
+			'mail' => $from.$email_domain,
+			'status' => 1,
+			'init' => 'email address'
+		);
+		if(user_save(null, $newUser)){
+			$smstxt = 'user created successfully';
+		
+		}else{
+			$smstxt = 'There was a problem registering, please contact XXX-XXXX';
+		}	
+		//add to RocketSMS contact list
+		dsm($usr);
+	}
+	return $smstxt;
+	
+}
 
 /**
  *Returns data string found after the keyword 
