@@ -34,7 +34,7 @@ function clipsms_sms_incoming($op, $number, $message, $options){
 			$rply = "No keyword detected in message.";
 		}
 
-	sms_send($number, $rply);
+//	sms_send($number, $rply);
 	watchdog("clipsms","SMS Reply: $rply");
 	
 	}//process
@@ -112,21 +112,17 @@ function clipsms_get_receipt_info($rid){
 function clipsms_register_user_info($smstxt, $from){
 	
 	$email_domain = '@digitextjm.com';
-/*	//use lime keyword to specify carrier
-	if(stristr($smstxt, 'lime')){
-		$email_domain = '@txt2lime.com';
-	}
-*/
 	//check sms text
-	if(!(stristr($smstxt, 'jdf123'))){
+	if(!(stristr($smstxt, 'jd123'))){
 		return "Not Authorized";
 	}	
 
-		//if user already exists, check if they are 'active'
+	//if user already exists, check if they are 'active'
 	$exists_user = user_load_by_name($from);
-	if($exists_user->status ===1 ){
+	if($exists_user->status ==1 ){
 		$smstxt = 'Number already registered, please try using r XXXX or f XXXX for receipt or farmer information or call XXX-XXXX for further assistance';
-	}elseif($exists_user->status ===0){$smstxt = 'This number is blocked.'
+	}elseif($exists_user->status ==0){
+		$smstxt = 'This number is blocked.';
 	}else{
 		
 		//create new user
@@ -137,15 +133,11 @@ function clipsms_register_user_info($smstxt, $from){
 			'status' => 1,
 			'init' => 'email address'
 		);
-		if(user_save(null, $newUser)){
-			$smstxt = 'user created successfully';
-		
-		}else{
-			$smstxt = 'There was a problem registering, please contact XXX-XXXX';
-		}	
+		user_save(null, $newUser);
 		//add to RocketSMS contact list
 		dsm($usr);
-	}
+		
+		}
 	return $smstxt;
 	
 }
