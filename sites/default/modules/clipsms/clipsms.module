@@ -13,27 +13,41 @@ function clipsms_sms_incoming($op, $number, $message, $options){
 	//get string after keyword
 	$var = clipsms_message_var($kw, $message);
 
-	switch ($kw)
-	{
-		case 'farmer':
-		case 'f':
-			watchdog("clipsms",'message keyword = '.$kw );
-			$rply = clipsms_get_farmer_info($var);
-		break;
-		case 'receipt':
-		case 'r':
-			watchdog("clipsms",'message keyword = '.$kw );
-			$rply = clipsms_get_receipt_info($var);
-		break;
-		case 'police':
-		case 'p':
-			watchdog("clipsms",'message keyword = '.$kw );
-			$rply = clipsms_register_user_info($var, $number);
-		break;
-		default:
-			$rply = "No keyword detected in message.";
+	if(clipsms_auth($number)){
+		switch ($kw)
+		{
+			case 'farmer':
+			case 'f':
+				watchdog("clipsms",'message keyword = '.$kw );
+				$rply = clipsms_get_farmer_info($var);
+			break;
+			case 'receipt':
+			case 'r':
+				watchdog("clipsms",'message keyword = '.$kw );
+				$rply = clipsms_get_receipt_info($var);
+			break;
+			case 'register';
+			case 'police':
+			case 'p':
+				watchdog("clipsms",'message keyword = '.$kw );
+				$rply = clipsms_register_user_info($var, $number);
+			break;
+			default:
+				$rply = "No keyword detected in message.";
+			}
+	}elseif(!clipsms_auth($number)){
+		switch ($kw)
+		{
+			case 'register';
+			case 'police':
+			case 'p':
+				watchdog("clipsms",'message keyword = '.$kw );
+				$rply = clipsms_register_user_info($var, $number);
+			break;
+			default:
+				$rply = "Not Authorized.";
 		}
-
+	}
 	sms_send($number, $rply);
 	watchdog("clipsms","SMS Reply: $rply");
 	
@@ -112,14 +126,15 @@ function clipsms_get_receipt_info($rid){
 function clipsms_register_user_info($smstxt, $from){
 	
 	$email_domain = '@digitextjm.com';
-	//check sms text
+	//check sms text passphrase is used
 	if(!(stristr($smstxt, 'jc123'))){
 		return "Not Authorized";
 	}	
 
 	//if user already exists, check if they are 'active'
 	$exists_user = clipsms_number_exists($from);
-	if($exists_user && clipsms_user_blocked($from)){
+	$blocked_user = clipsms_user_blocked($from);
+	if($exists_user && $blocked_user){
 		$smstxt = 'This number has been blocked.';
 	}elseif($exists_user){
 		$smstxt = 'Number already registered, please try using r XXXX or f XXXX for receipt or farmer information or call XXX-XXXX for further assistance';
@@ -195,4 +210,21 @@ function get_agriapi_data($path, $usr='rada' , $pass='demo'){
 		watchdog("clipsms","API query sucessful: $result->data");
 		return $data;
 		}
+}
+
+/**
+ *Returns TRUE if number is authorized, FALSE if not 
+ */
+function clipsms_auth($nmbr){
+
+	//if user already exists, check if they are 'active'
+	$exists_user = clipsms_number_exists($nmbr);
+	$blocked_user = clipsms_user_blocked($nmbr);
+	if($exists_user && $blocked_user){
+		return FALSE;	
+	}elseif(!$exists_user){
+		return FALSE;	
+		}else{
+		return TRUE;
+	}
 }
